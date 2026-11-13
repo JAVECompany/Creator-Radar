@@ -1,13 +1,20 @@
 # 공식 API 연동 범위
 
-각 어댑터는 정상, 일부 지원, 인증 필요, 미지원, 요청 제한, 일시적 장애 및 실패 상태를 반환합니다. 연결 성공 여부는 관리자 작업 화면에서 실제 호출 결과로 확인합니다. Instagram, YouTube, TikTok은 공개 프로필 URL 수동 등록을 지원합니다. 기존 네이버 블로그 기록은 연동 종료로 표시되며 조회할 수 있습니다.
+각 어댑터는 정상, 일부 지원, 인증 필요, 미지원, 요청 제한, 일시적 장애 및 실패 상태를 반환합니다. **SNS 연결**에서 자격 증명을 확인하고, 수집 작업에서 실제 호출 결과를 확인할 수 있습니다. 기존 네이버 블로그와 TikTok 기록은 연동 종료로 표시됩니다.
 
 | 공급자 | 구현한 호출 | 연동 준비와 제한 |
 | --- | --- | --- |
 | YouTube | Data API 채널 키워드 검색, ID·핸들로 채널 조회, 공개 구독자 수와 업로드 목록 | `YOUTUBE_API_KEY`. 지역 코드는 결과 지역 조건이며 계정 국가를 증명하지 않습니다. 구독자 숨김은 결측입니다. 제공 메타데이터에 보존 기한을 적용하고 제공 데이터는 팬 분류와 적합도 계산에서 제외합니다. [API 레퍼런스](https://developers.google.com/youtube/data/reference/rest) · [개발자 정책](https://developers.google.com/youtube/terms/developer-policies) |
 | Instagram 탐색 | Facebook Login의 Business Discovery로 정확한 사용자명의 프로페셔널 계정 조회 | `IG_DISCOVERY_TOKEN`, `IG_DISCOVERY_ACCOUNT_ID`, `META_GRAPH_VERSION`. 연결된 Facebook Page, 대상 API 권한 및 필요한 App Review를 확인합니다. 일반 계정 및 키워드 탐색은 수동 등록을 사용합니다. [Meta Instagram API](https://www.postman.com/meta/instagram/collection/6yqw8pt/instagram-api) |
-| TikTok | 동의한 단일 계정의 Display API 공개 프로필 및 승인 범위 내 영상·팔로워 수 | `TIKTOK_ACCESS_TOKEN`, `TIKTOK_SCOPES`. `user.info.basic`과 `user.info.profile`이 필요하며 영상에는 `video.list`, 팔로워에는 `user.info.stats`가 필요합니다. 토큰 교체는 운영자가 관리합니다. 일반 계정 검색은 수동 등록을 사용합니다. [Display API](https://developers.tiktok.com/docs/en/display-api-get-started) · [스코프](https://developers.tiktok.com/bulletin/user-info-scope-migration) |
+| Facebook | 설정한 공개 관리 페이지의 프로필과 공개 팔로워 수 | `FACEBOOK_PAGE_ID`, `FACEBOOK_PAGE_ACCESS_TOKEN`, `META_GRAPH_VERSION`. 설정한 페이지의 정확한 사용자명 또는 숫자 ID를 입력합니다. [Pages API](https://developers.facebook.com/docs/graph-api/reference/page/) |
+| Threads | 토큰을 승인한 계정의 프로필, 권한이 있는 공개 프로필의 정확한 사용자명 조회 | `THREADS_ACCESS_TOKEN`. 기본 연결은 `threads_basic`, 공개 프로필 조회는 `threads_profile_discovery`를 허용한 사용자 토큰이 필요합니다. [Meta 공개 프로필 조회](https://www.postman.com/meta/threads/request/34203612-d5ea7186-5329-4c76-bbb6-3dd408e508b5) |
 | AI 분석 | 공개 게시물 주제 분류 및 신뢰도·근거·모델 기록 | `AI_PROVIDER=openai`, `OPENAI_API_KEY`, `OPENAI_MODEL`. 모델은 Chat Completions의 JSON 응답을 지원해야 합니다. 관리자 검토를 거친 게시물의 텍스트 메타데이터만 전달합니다. |
+
+## Facebook 및 Threads 연결
+
+1. **Facebook**은 Meta Graph API Explorer에서 관리 페이지에 접근을 허용한 사용자 토큰으로 `GET /me/accounts?fields=id,name,access_token`을 호출합니다. 응답에서 대상 페이지의 `id`와 `access_token`을 각각 `FACEBOOK_PAGE_ID`와 `FACEBOOK_PAGE_ACCESS_TOKEN`에 넣습니다. [Meta 페이지 토큰 요청](https://www.postman.com/meta/facebook/request/bqfxwbp/get-access-tokens-of-pages-you-manage)
+2. **Threads**는 Meta Threads 사용 사례에 등록한 앱에서 Threads OAuth로 사용자 토큰을 발급하고 `THREADS_ACCESS_TOKEN`에 넣습니다. 자신의 프로필에는 `threads_basic`을 쓰고, 외부 공개 프로필도 조회할 경우 `threads_profile_discovery`를 승인받아 토큰에 포함합니다. [Meta Threads 토큰 가이드](https://www.postman.com/meta/threads/documentation/dht3nzz/threads-api?entity=request-34203612-74fb48b1-ad1a-480e-b200-4dcdb8126a2f)
+3. 환경변수를 바꾼 뒤 웹과 워커를 재시작하고 **SNS 연결 → 연결 확인 및 프로필 저장**을 누릅니다. 성공한 계정은 전체 크리에이터 목록에 표시됩니다.
 
 ## Instagram OAuth 및 메시징
 

@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, Binoculars, ChevronDown, ContactRound, Instagram, LayoutDashboard, ListChecks, LogOut, Radar, Send, Settings, UsersRound } from "lucide-react";
+import { Activity, Binoculars, ChevronDown, ContactRound, LayoutDashboard, Link2, ListChecks, LogOut, Radar, Send, Settings, UsersRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const items = [
   { label: "대시보드", href: "/", icon: LayoutDashboard }, { label: "크리에이터 탐색", href: "/discover", icon: Binoculars },
   { label: "전체 크리에이터", href: "/creators", icon: UsersRound }, { label: "영입 후보 관리", href: "/candidates", icon: ContactRound },
   { label: "DM 작성 및 템플릿", href: "/compose", icon: Send }, { label: "DM 전송 관리", href: "/messages", icon: ListChecks },
-  { label: "Instagram 계정 연결", href: "/instagram", icon: Instagram }, { label: "수집 및 분석 작업", href: "/jobs", icon: Activity },
+  { label: "SNS 연결", href: "/connections", icon: Link2 }, { label: "수집 및 분석 작업", href: "/jobs", icon: Activity },
   { label: "설정", href: "/settings", icon: Settings },
 ];
 export function Brand() {

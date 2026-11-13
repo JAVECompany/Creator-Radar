@@ -20,6 +20,7 @@ Next.js가 관리자 UI와 API를 제공한다. 워커는 같은 코드베이스
 | `SubscriptionPlatform`, `SubscriptionPlatformAlias`, `CreatorSubscriptionPlatform`, `SubscriptionPlatformEvidence` | 플랫폼의 규칙, SNS 계정의 여러 플랫폼 감지 결과와 URL·별칭 근거 |
 | `Job`, `ProviderRequestLog` | 수집·갱신·분석·DM·보존 처리를 통합한 영구 큐와 공급자별 호출 결과 |
 | `InstagramConnection`, `InstagramCorrespondent`, `InstagramEvent` | 관리자 소유의 OAuth 연결, 연결별 Meta 범위 수신자 ID와 최근 수신 시각, 웹훅 중복 방지 |
+| `TikTokConnection` | 종료된 TikTok 연동의 기존 연결 레코드를 보관하는 테이블 |
 | `DMTemplate`, `DMCampaign`, `DMMessage` | 템플릿과 캠페인의 계정별 메시지. 메시지가 캠페인 수신자 역할도 하며 발신 계정과 관리자, 본문 및 멱등성 키를 저장한다. |
 | `DMDeliveryAttempt`, `DMStatusHistory` | 메시지의 외부 전송 시도와 상태 변경 이력을 별도로 기록한다. |
 | `RecruitmentCandidate`, `RecruitmentActivity`, `RecruitmentNote`, `Tag` | 크리에이터별 후보와 단계 이력, 관리자 메모, 다대다 태그 및 담당자 연결 |
@@ -37,6 +38,7 @@ Next.js가 관리자 UI와 API를 제공한다. 워커는 같은 코드베이스
 | `POST /api/instagram/connect` | OAuth 리디렉션 시작 |
 | `GET /api/instagram/callback` | OAuth 콜백 및 연결 상태 반영 |
 | `GET /api/instagram/webhook`, `POST /api/instagram/webhook` | Meta 구독 확인과 서명 검증된 수신 이벤트 |
+| `POST /api/connections` | Instagram 탐색 인증 확인, Facebook 페이지 및 Threads 프로필 저장 |
 | `GET /api/health` | DB 연결 헬스체크 |
 
 JSON 응답은 `{ ok: true, data }` 또는 `{ ok: false, error: { code, message } }` 형식이다. 로그인 및 관리자 폼 제출은 브라우저 화면으로 리디렉션한다. 관리자 쓰기 요청은 로그인과 요청 출처를 검사한다. 웹훅은 Meta 서명을 검사한다.

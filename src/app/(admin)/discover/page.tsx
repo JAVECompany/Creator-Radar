@@ -3,7 +3,7 @@ import { Binoculars } from "lucide-react";
 import { adminPage } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { label } from "@/lib/labels";
-import { isSupportedPlatform } from "@/lib/platforms";
+import { isSupportedPlatform, platforms } from "@/lib/platforms";
 import { providers } from "@/services/providers";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Action, Field, Hidden, Input } from "@/components/ui/form";
@@ -16,20 +16,20 @@ export default async function Discover({ searchParams }: { searchParams: Promise
   const capabilities = Object.values(providers).map((provider) => provider.getProviderCapabilities());
   const logs = await db.providerRequestLog.findMany({ distinct: ["platform"], orderBy: { createdAt: "desc" } });
   return <>
-    <PageTitle title="크리에이터 탐색" description="공식 API로 검색하거나 확인한 공개 프로필을 등록하세요." action={<Link href="/creators" className={buttonVariants()}>내부 DB 검색</Link>} />
+    <PageTitle title="크리에이터 탐색" description="공식 API로 검색하거나 확인한 공개 프로필을 등록하세요." action={<div className="flex gap-2"><Link href="/connections" className={buttonVariants()}>SNS 연결</Link><Link href="/creators" className={buttonVariants()}>내부 DB 검색</Link></div>} />
     <Flash query={await searchParams} />
     <div className="grid gap-4 xl:grid-cols-[1.45fr_1fr]">
       <Panel title="외부 SNS 검색" description="검색 결과는 작업 화면에서 확인할 수 있습니다." action={<Link href="/jobs" className={buttonVariants({ variant: "ghost" })}>작업 보기</Link>}>
         <Action action="discovery" next="/jobs" className="grid gap-4 p-5">
-          <Field label="검색어 또는 Instagram 사용자명"><Input name="query" required maxLength={150} placeholder="패션, 코스프레, 또는 정확한 계정명" /></Field>
+          <Field label="검색어, 정확한 사용자명 또는 Facebook 페이지 ID"><Input name="query" required maxLength={150} placeholder="키워드, @사용자명 또는 페이지 ID" /></Field>
           <Field label="YouTube 지역 코드 (선택)"><Input name="country" pattern="[a-zA-Z]{2}" maxLength={2} placeholder="KR" /></Field>
           <fieldset className="grid gap-2"><legend className="mb-2 font-medium">검색 플랫폼</legend>{capabilities.map((capability) => {
-            const disabled = !capability.configured || capability.approval || capability.search === "none";
+            const disabled = !capability.configured || capability.approval;
             const last = logs.find((log) => log.platform === capability.platform);
-            const status = capability.search === "none" ? "수동 검색만 가능" : capability.approval ? "승인·권한 필요" : !capability.configured ? "API 키 필요" : last ? label(last.status) : "키 설정됨 · 호출 미확인";
+            const status = capability.approval ? "승인·권한 필요" : !capability.configured ? "API 키 필요" : last ? label(last.status) : "키 설정됨 · 호출 미확인";
             return <label key={capability.platform} className="flex gap-2.5 rounded-lg border border-border p-3"><input name="platforms" type="checkbox" value={capability.platform} disabled={disabled} /><span className="min-w-0 flex-1"><span className="font-medium">{label(capability.platform)}</span><span className="mt-1 block text-xs leading-5 text-muted-foreground">{capability.description}</span></span><span><Badge value={status} /></span></label>;
           })}</fieldset>
-          <div><Button variant="primary" disabled={capabilities.every((c) => !c.configured || c.approval || c.search === "none")}><Binoculars size={16} />검색 작업 시작</Button></div>
+          <div><Button variant="primary" disabled={capabilities.every((c) => !c.configured || c.approval)}><Binoculars size={16} />검색 작업 시작</Button></div>
         </Action>
       </Panel>
       <Panel title="저장한 검색 조건" description="내부 DB 검색에 저장한 프리셋입니다.">
@@ -52,7 +52,7 @@ export default async function Discover({ searchParams }: { searchParams: Promise
           </li>;
         })}</ul> : <Empty title="저장한 프리셋이 없습니다." description="전체 크리에이터 화면에서 필터를 저장할 수 있습니다." />}
       </Panel>
-      <div id="manual" className="scroll-mt-6 xl:col-span-2"><Panel title="공개 프로필 수동 등록" description="Instagram, YouTube, TikTok의 공개 프로필 URL을 등록할 수 있습니다."><ManualProfile next="/discover#manual" /></Panel></div>
+      <div id="manual" className="scroll-mt-6 xl:col-span-2"><Panel title="공개 프로필 수동 등록" description={platforms.map(label).join(", ") + "의 공개 프로필 URL을 등록할 수 있습니다."}><ManualProfile next="/discover#manual" /></Panel></div>
     </div>
   </>;
 }

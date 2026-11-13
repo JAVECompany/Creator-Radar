@@ -150,7 +150,8 @@ export async function command(raw: string, input: unknown, actorId: string) {
         const contentUrl = link(url);
         const host = new URL(contentUrl).hostname.replace(/^www\./, "");
         check(isSupportedPlatform(account.platform), "연동이 종료된 플랫폼입니다.", 409);
-        const hosts = { INSTAGRAM: ["instagram.com"], YOUTUBE: ["youtube.com", "youtu.be"], TIKTOK: ["tiktok.com"] };
+        const hosts = { INSTAGRAM: ["instagram.com"], FACEBOOK: ["facebook.com", "m.facebook.com"], THREADS: ["threads.com", "threads.net"],
+          YOUTUBE: ["youtube.com", "youtu.be"] };
         check(hosts[account.platform].includes(host), "계정과 같은 SNS의 공개 게시물을 입력하세요.");
         const existing = await tx.creatorContent.findUnique({ where: { accountId_url: { accountId: id, url: contentUrl } } });
         if (existing?.source === "OFFICIAL_API") check(false, "공급자가 수집한 게시물은 표시 용도로 보관됩니다. 별도의 공개 게시물 근거를 입력하세요.");

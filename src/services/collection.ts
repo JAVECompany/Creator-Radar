@@ -43,7 +43,7 @@ export async function registerProfile(input: z.infer<typeof manualSchema>, actor
     return account;
   });
 }
-async function saveProfile(profile: Profile, knownAccountId?: string) {
+export async function saveProfile(profile: Profile, knownAccountId?: string) {
   const collectedAt = new Date();
   const expiresAt = profile.platform === "YOUTUBE" ? new Date(collectedAt.getTime() + 29 * 86400000) : null;
   const links = (profile.links ?? []).map((item) => publicUrl(item)?.href).filter((item): item is string => Boolean(item));

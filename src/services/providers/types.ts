@@ -3,7 +3,7 @@ import type { Platform } from "@prisma/client";
 export type ProviderStatus = "SUCCESS" | "PARTIAL" | "NOT_SUPPORTED" | "AUTH_REQUIRED" | "RATE_LIMITED" | "UNAVAILABLE" | "FAILED";
 export type Result<T> = { status: ProviderStatus; data?: T; reason?: string };
 export type Capabilities = {
-  platform: Platform; search: "keyword" | "username" | "none";
+  platform: Platform; search: "keyword" | "username";
   profile: boolean; contents: boolean; metrics: boolean;
   configured: boolean; approval: boolean; description: string;
 };
@@ -56,7 +56,7 @@ export async function officialJson(url: URL | string, init?: RequestInit): Promi
     const reason = body?.error?.errors?.[0]?.reason;
     if (response.status === 429 || ["quotaExceeded", "dailyLimitExceeded", "rateLimitExceeded", "userRateLimitExceeded"].includes(reason) || [4, 17, 32, 613].includes(body?.error?.code))
       throw new ProviderFailure("RATE_LIMITED", "공식 API 사용량 제한에 도달했습니다.");
-    if ([401, 403].includes(response.status) || body?.error?.code === 190)
+    if ([401, 403].includes(response.status) || [10, 190, 200].includes(body?.error?.code))
       throw new ProviderFailure("AUTH_REQUIRED", "공식 API 인증 또는 권한을 확인하세요.");
     throw new ProviderFailure(response.status >= 500 ? "UNAVAILABLE" : "FAILED", "공식 API 요청이 거부되었습니다.");
   }

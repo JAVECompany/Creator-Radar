@@ -9,9 +9,11 @@ datasource db {
 enum Platform {
   INSTAGRAM
   YOUTUBE
-  TIKTOK
   // Historical account and request records only.
+  TIKTOK
   NAVER_BLOG
+  FACEBOOK
+  THREADS
 }
 
 enum Source {
@@ -112,6 +114,7 @@ model User {
   passwordHash String
   active Boolean @default(true)
   sessions UserSession[]
+  tikTokConnections TikTokConnection[]
   assigned RecruitmentCandidate[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -359,6 +362,23 @@ model OAuthState {
   sessionId String @db.Uuid
   expiresAt DateTime
   @@index([expiresAt])
+}
+
+// Retained for databases initialized before the integration was removed.
+model TikTokConnection {
+  id String @id @default(uuid()) @db.Uuid
+  ownerId String @db.Uuid
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  openId String @unique
+  handle String @unique
+  accessCiphertext String
+  refreshCiphertext String
+  scopes String[]
+  expiresAt DateTime
+  refreshExpiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([ownerId])
 }
 
 model InstagramCorrespondent {

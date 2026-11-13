@@ -14,6 +14,16 @@ export class InstagramProvider extends Provider {
     return { platform: "INSTAGRAM", search: "username", profile: true, contents: true, metrics: true,
       configured, approval: !configured, description: "Facebook Login Business Discovery · 정확한 프로페셔널 사용자명 · 일반 계정/키워드 검색 미지원" } as const;
   }
+  verifyDiscovery() {
+    return configured<string>(this.getProviderCapabilities().configured, async () => {
+      const url = new URL("https://graph.facebook.com/" + graphVersion() + "/" + process.env.IG_DISCOVERY_ACCOUNT_ID);
+      url.searchParams.set("fields", "id,username");
+      const { id, username } = z.object({ id: z.string(), username: z.string().min(1) })
+        .parse(await officialJson(url, { headers: { Authorization: "Bearer " + process.env.IG_DISCOVERY_TOKEN } }));
+      if (id !== process.env.IG_DISCOVERY_ACCOUNT_ID) return { status: "FAILED", reason: "Instagram 계정 ID가 일치하지 않습니다." };
+      return { status: "SUCCESS", data: username };
+    });
+  }
   async searchCreators({ query }: SearchInput) {
     if (!/^@?[\w.]{1,30}$/.test(query)) return unsupported<Profile[]>("Instagram은 프로페셔널 계정의 정확한 사용자명만 조회합니다.");
     const result = await this.getCreatorProfile("https://www.instagram.com/" + query.replace(/^@/, ""));
