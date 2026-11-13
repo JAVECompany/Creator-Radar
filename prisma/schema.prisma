@@ -1,0 +1,496 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+}
+
+enum Platform {
+  INSTAGRAM
+  YOUTUBE
+  TIKTOK
+  NAVER_BLOG
+}
+
+enum Source {
+  MANUAL
+  OFFICIAL_API
+}
+
+enum ReviewStatus {
+  PENDING
+  CLEARED
+  HOLD
+}
+
+enum AdultStatus {
+  UNVERIFIED
+  VERIFIED
+  EXCLUDED
+}
+
+enum DetectionStatus {
+  UNKNOWN
+  NONE
+  DETECTED
+  REVIEW
+}
+
+enum Category {
+  COSPLAY
+  FASHION
+  MODEL
+  SWIMWEAR
+  LINGERIE
+  BODY_PROFILE
+  ART_NUDE
+  ADULT_ORIENTED_TEXT
+  OTHER
+}
+
+enum AnalysisStatus {
+  PENDING
+  COMPLETED
+  REVIEW
+  FAILED
+}
+
+enum JobType {
+  DISCOVERY
+  REFRESH
+  ANALYSIS
+  SUBSCRIPTIONS
+  METRICS
+  DM_SEND
+  RETENTION
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum DmStatus {
+  NOT_CONTACTED
+  DRAFT
+  QUEUED
+  SENDING
+  SENT
+  MANUALLY_SENT
+  FAILED
+  NOT_ELIGIBLE
+  REPLIED
+  FOLLOW_UP
+}
+
+enum DeliveryMethod {
+  API
+  MANUAL
+}
+
+enum RecruitmentStage {
+  CANDIDATE
+  REVIEWING
+  CONTACT_READY
+  CONTACTED
+  REPLIED
+  INTERESTED
+  DEMO
+  APPLIED
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id String @id @default(uuid()) @db.Uuid
+  email String @unique
+  passwordHash String
+  active Boolean @default(true)
+  sessions UserSession[]
+  assigned RecruitmentCandidate[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model UserSession {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  @@index([expiresAt])
+}
+
+model AuditLog {
+  id String @id @default(uuid()) @db.Uuid
+  actorId String? @db.Uuid
+  action String
+  entityId String?
+  detail Json?
+  createdAt DateTime @default(now())
+  @@index([entityId, createdAt])
+}
+
+model RateBucket {
+  key String @id
+  count Int @default(1)
+  expiresAt DateTime
+  @@index([expiresAt])
+}
+
+model Setting {
+  key String @id
+  value Json
+  updatedAt DateTime @updatedAt
+}
+
+model SearchPreset {
+  id String @id @default(uuid()) @db.Uuid
+  ownerId String @db.Uuid
+  name String
+  filters Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([ownerId, name])
+}
+
+model Creator {
+  id String @id @default(uuid()) @db.Uuid
+  name String
+  country String?
+  region String?
+  adultStatus AdultStatus @default(UNVERIFIED)
+  adultEvidence String?
+  adultVerifiedAt DateTime?
+  reviewStatus ReviewStatus @default(PENDING)
+  businessContact Boolean?
+  score Float?
+  scoreEvidence Json?
+  scoredAt DateTime?
+  contactStatus DmStatus @default(NOT_CONTACTED)
+  accounts CreatorPlatformAccount[]
+  candidate RecruitmentCandidate?
+  notes RecruitmentNote[]
+  tags Tag[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([createdAt])
+  @@index([contactStatus])
+}
+
+model CreatorPlatformAccount {
+  id String @id @default(uuid()) @db.Uuid
+  creatorId String @db.Uuid
+  creator Creator @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  platform Platform
+  source Source
+  externalId String?
+  handle String
+  profileUrl String
+  avatarUrl String?
+  bio String?
+  links String[]
+  followers BigInt?
+  lastActiveAt DateTime?
+  engagement Float?
+  collectedAt DateTime?
+  expiresAt DateTime?
+  detectionStatus DetectionStatus @default(UNKNOWN)
+  detectedAt DateTime?
+  analysisStatus AnalysisStatus @default(PENDING)
+  contents CreatorContent[]
+  metrics CreatorMetricSnapshot[]
+  analyses AnalysisResult[]
+  subscriptions CreatorSubscriptionPlatform[]
+  messages DMMessage[]
+  correspondents InstagramCorrespondent[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([platform, externalId])
+  @@unique([platform, profileUrl])
+  @@index([creatorId])
+  @@index([platform, followers])
+  @@index([expiresAt])
+}
+
+model CreatorContent {
+  id String @id @default(uuid()) @db.Uuid
+  accountId String @db.Uuid
+  account CreatorPlatformAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  externalId String?
+  url String
+  title String?
+  description String?
+  publishedAt DateTime?
+  source Source
+  reviewStatus ReviewStatus @default(PENDING)
+  collectedAt DateTime @default(now())
+  @@unique([accountId, url])
+  @@index([accountId, publishedAt])
+}
+
+model CreatorMetricSnapshot {
+  id String @id @default(uuid()) @db.Uuid
+  accountId String @db.Uuid
+  account CreatorPlatformAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  followers BigInt?
+  engagement Float?
+  capturedAt DateTime @default(now())
+  @@index([accountId, capturedAt])
+}
+
+model AnalysisResult {
+  id String @id @default(uuid()) @db.Uuid
+  accountId String @db.Uuid
+  account CreatorPlatformAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  jobId String? @unique @db.Uuid
+  model String
+  status AnalysisStatus
+  manuallyReviewed Boolean @default(false)
+  evidence AnalysisEvidence[]
+  createdAt DateTime @default(now())
+  @@index([accountId, createdAt])
+}
+
+model AnalysisEvidence {
+  id String @id @default(uuid()) @db.Uuid
+  analysisId String @db.Uuid
+  analysis AnalysisResult @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  category Category
+  confidence Float
+  url String
+  @@index([category])
+}
+
+model SubscriptionPlatform {
+  id String @id @default(uuid()) @db.Uuid
+  name String @unique
+  aliases SubscriptionPlatformAlias[]
+  detections CreatorSubscriptionPlatform[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SubscriptionPlatformAlias {
+  id String @id @default(uuid()) @db.Uuid
+  platformId String @db.Uuid
+  platform SubscriptionPlatform @relation(fields: [platformId], references: [id], onDelete: Cascade)
+  value String
+  isDomain Boolean @default(false)
+  ambiguous Boolean @default(false)
+  @@unique([platformId, value, isDomain])
+}
+
+model CreatorSubscriptionPlatform {
+  id String @id @default(uuid()) @db.Uuid
+  accountId String @db.Uuid
+  account CreatorPlatformAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  platformId String @db.Uuid
+  platform SubscriptionPlatform @relation(fields: [platformId], references: [id], onDelete: Cascade)
+  evidence SubscriptionPlatformEvidence[]
+  detectedAt DateTime @default(now())
+  @@unique([accountId, platformId])
+}
+
+model SubscriptionPlatformEvidence {
+  id String @id @default(uuid()) @db.Uuid
+  detectionId String @db.Uuid
+  detection CreatorSubscriptionPlatform @relation(fields: [detectionId], references: [id], onDelete: Cascade)
+  url String
+  matched String
+  ambiguous Boolean @default(false)
+}
+
+model Job {
+  id String @id @default(uuid()) @db.Uuid
+  type JobType
+  status JobStatus @default(PENDING)
+  actorId String? @db.Uuid
+  payload Json
+  dedupeKey String? @unique
+  attempts Int @default(0)
+  maxAttempts Int @default(3)
+  progress Int @default(0)
+  result Json?
+  error String?
+  runAt DateTime @default(now())
+  leaseUntil DateTime?
+  leaseToken String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([status, runAt])
+  @@index([status, leaseUntil])
+}
+
+model ProviderRequestLog {
+  id String @id @default(uuid()) @db.Uuid
+  platform Platform
+  operation String
+  status String
+  count Int?
+  jobId String? @db.Uuid
+  createdAt DateTime @default(now())
+  @@index([platform, createdAt])
+}
+
+model InstagramConnection {
+  id String @id @default(uuid()) @db.Uuid
+  ownerId String @db.Uuid
+  instagramId String @unique
+  username String
+  tokenCiphertext String?
+  expiresAt DateTime
+  scopes String[]
+  subscribed Boolean @default(false)
+  disconnectedAt DateTime?
+  correspondents InstagramCorrespondent[]
+  messages DMMessage[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model OAuthState {
+  digest String @id
+  sessionId String @db.Uuid
+  expiresAt DateTime
+  @@index([expiresAt])
+}
+
+model InstagramCorrespondent {
+  id String @id @default(uuid()) @db.Uuid
+  connectionId String @db.Uuid
+  connection InstagramConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  scopedId String
+  accountId String? @db.Uuid
+  account CreatorPlatformAccount? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  linkEvidence String?
+  lastInboundAt DateTime
+  @@unique([connectionId, scopedId])
+  @@unique([connectionId, accountId])
+}
+
+model InstagramEvent {
+  messageId String @id
+  connectionId String @db.Uuid
+  createdAt DateTime @default(now())
+  @@index([createdAt])
+}
+
+model DMTemplate {
+  id String @id @default(uuid()) @db.Uuid
+  name String @unique
+  body String
+  archivedAt DateTime?
+  messages DMMessage[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model DMCampaign {
+  id String @id @default(uuid()) @db.Uuid
+  actorId String @db.Uuid
+  createdAt DateTime @default(now())
+  messages DMMessage[]
+}
+
+model DMMessage {
+  id String @id @default(uuid()) @db.Uuid
+  accountId String @db.Uuid
+  account CreatorPlatformAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  connectionId String? @db.Uuid
+  connection InstagramConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+  sender String?
+  recipientScopedId String?
+  campaignId String? @db.Uuid
+  campaign DMCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  templateId String? @db.Uuid
+  template DMTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  actorId String @db.Uuid
+  idempotencyKey String @unique
+  body String
+  status DmStatus @default(DRAFT)
+  method DeliveryMethod
+  followUpToId String? @db.Uuid
+  requestedAt DateTime @default(now())
+  sentAt DateTime?
+  readAt DateTime?
+  deliveredAt DateTime?
+  apiMessageId String? @unique
+  uncertain Boolean @default(false)
+  errorCode String?
+  jobId String? @unique @db.Uuid
+  history DMStatusHistory[]
+  attempts DMDeliveryAttempt[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([accountId, status])
+  @@index([status, createdAt])
+}
+
+model DMDeliveryAttempt {
+  id String @id @default(uuid()) @db.Uuid
+  messageId String @db.Uuid
+  message DMMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  startedAt DateTime @default(now())
+  finishedAt DateTime?
+  outcome String?
+  errorCode String?
+}
+
+model DMStatusHistory {
+  id String @id @default(uuid()) @db.Uuid
+  messageId String @db.Uuid
+  message DMMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  status DmStatus
+  actorId String? @db.Uuid
+  reason String?
+  createdAt DateTime @default(now())
+  @@index([messageId, createdAt])
+}
+
+model RecruitmentCandidate {
+  id String @id @default(uuid()) @db.Uuid
+  creatorId String @unique @db.Uuid
+  creator Creator @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  stage RecruitmentStage @default(CANDIDATE)
+  assigneeId String? @db.Uuid
+  assignee User? @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
+  active Boolean @default(true)
+  followUpAt DateTime?
+  activity RecruitmentActivity[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([active, stage])
+}
+
+model RecruitmentActivity {
+  id String @id @default(uuid()) @db.Uuid
+  candidateId String @db.Uuid
+  candidate RecruitmentCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  actorId String @db.Uuid
+  stage RecruitmentStage
+  action String
+  createdAt DateTime @default(now())
+  @@index([candidateId, createdAt])
+}
+
+model RecruitmentNote {
+  id String @id @default(uuid()) @db.Uuid
+  creatorId String @db.Uuid
+  creator Creator @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  actorId String @db.Uuid
+  body String
+  createdAt DateTime @default(now())
+  @@index([creatorId, createdAt])
+}
+
+model Tag {
+  id String @id @default(uuid()) @db.Uuid
+  name String @unique
+  creators Creator[]
+  createdAt DateTime @default(now())
+}
