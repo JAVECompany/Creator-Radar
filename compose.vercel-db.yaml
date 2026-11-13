@@ -1,0 +1,27 @@
+services:
+  db:
+    command:
+      - postgres
+      - -c
+      - ssl=on
+      - -c
+      - ssl_cert_file=/etc/postgres-tls/server.crt
+      - -c
+      - ssl_key_file=/etc/postgres-tls/server.key
+      - -c
+      - hba_file=/etc/postgres-vercel-pg_hba.conf
+    ports:
+      - "${RADAR_DB_BIND_IP:?Set the Docker host interface IP}:${RADAR_DB_PORT:-5432}:5432"
+    volumes:
+      - ${RADAR_DB_TLS_DIR:?Set the PostgreSQL TLS directory}:/etc/postgres-tls:ro
+      - ./deploy/postgres-vercel-pg_hba.conf:/etc/postgres-vercel-pg_hba.conf:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          PGPASSWORD="$$POSTGRES_PASSWORD" PGSSLMODE=require
+          psql -h 127.0.0.1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -Atqc 'SELECT 1'
+
+  backup:
+    environment:
+      PGSSLMODE: require

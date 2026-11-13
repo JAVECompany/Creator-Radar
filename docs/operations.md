@@ -50,6 +50,90 @@ docker compose -p creator-radar -f compose.production.yaml -f compose.self-hoste
 
 관리자 생성 명령에도 동일한 Compose 파일 두 개를 전달합니다. DB 파일은 Docker 명명 볼륨 `production-postgres`에 있습니다. `backup` 컨테이너가 최초 시작 및 24시간마다 `./backups`에 PostgreSQL 커스텀 포맷 덤프를 기록하고 14일을 보관합니다. 백업 실패는 15분 후 재시도합니다. 호스트 장애에 대비해 백업 디렉터리를 암호화된 외부 저장소에 복제하고 정기적으로 복구를 연습합니다.
 
+## Vercel 웹/API와 자체 호스팅 PostgreSQL
+
+Vercel의 Next.js 프로젝트는 웹과 API를 실행합니다. 항상 켜져 있는 Linux Docker 서버에서는 `db`, `migrate`, `worker`, `backup`을 실행합니다. DB 초기화·마이그레이션·백업은 Docker 서버에서 진행합니다. [Vercel Next.js 배포](https://vercel.com/docs/frameworks/full-stack/nextjs) · [Vercel의 Compose 지원 범위](https://vercel.com/i/can-you-run-docker-compose-on-vercel)
+
+### 1. DB 접속 경로 준비
+
+1. Vercel에서 GitHub 저장소를 Next.js 프로젝트로 가져옵니다. Node.js는 `22.x`, Output Directory는 기본값을 사용합니다. `vercel.json`에서 pnpm 버전을 지정하고 `prisma generate` 후 Next.js를 빌드합니다.
+2. Vercel Settings → Networking에서 배포 리전의 Static IPs를 설정합니다. 이 기능은 요금이 부과됩니다. Docker 서버 방화벽에서 PostgreSQL 포트로 들어오는 연결은 Vercel이 지정한 IP만 허용합니다. Linux에서 포트를 Docker로 공개하면 UFW의 일반 입력 규칙을 우회할 수 있으므로 클라우드 방화벽이나 Docker 트래픽에 적용되는 방화벽 규칙에서 허용 범위를 설정합니다. [Vercel Static IPs](https://vercel.com/docs/networking/static-ips) · [Docker 방화벽](https://docs.docker.com/engine/network/packet-filtering-firewalls/)
+3. PostgreSQL에 사용할 DNS 이름과 해당 이름의 신뢰 가능한 TLS 인증서를 준비합니다. 예를 들어 `db.example.com`은 Docker 서버의 접속 가능한 주소를 가리킵니다. DNS는 Vercel에서 PostgreSQL에 TCP로 연결할 수 있도록 설정합니다. Cloudflare DNS를 사용한다면 해당 레코드를 DNS only로 설정합니다. 인증서 체인을 `server.crt`, 키를 `server.key`로 저장소 외부의 디렉터리에 배치합니다. 키의 소유자를 컨테이너 내 `postgres` 사용자에 대응하는 호스트 UID로 지정하고 권한을 `0600`으로 설정합니다. 컨테이너가 디렉터리를 탐색하고 인증서를 읽을 수 있어야 합니다. 인증서를 갱신한 뒤 `dc kill -s HUP db`로 PostgreSQL 설정을 다시 로드합니다. [PostgreSQL TLS 설정](https://www.postgresql.org/docs/17/ssl-tcp.html) · [Cloudflare 프록시 포트](https://developers.cloudflare.com/fundamentals/reference/network-ports/)
+
+### 2. Docker 서버 기동 및 운영 계정 설정
+
+Docker 서버의 저장소 루트에 `.env.production`을 작성합니다. 다음 예시의 비밀번호는 실제 값으로 대체합니다. DB 연결 URL의 비밀번호에 `@`, `:`, `/` 등의 특수문자가 있으면 URL 인코딩합니다.
+
+```dotenv
+POSTGRES_USER=radar
+POSTGRES_PASSWORD=<DB 소유자 비밀번호>
+POSTGRES_DB=radar
+DATABASE_URL=postgresql://radar:<URL 인코딩한 DB 소유자 비밀번호>@db:5432/radar?schema=public&sslmode=require
+RADAR_DB_BIND_IP=<Docker 서버의 DB 서비스 바인딩 IPv4 주소>
+RADAR_DB_PORT=5432
+RADAR_DB_TLS_DIR=/etc/creator-radar/postgres-tls
+APP_URL=https://radar.example.com
+```
+
+기존 DB 볼륨을 사용 중이면 현재 DB의 사용자, 비밀번호, DB 이름과 일치시킵니다. `POSTGRES_*` 초기화 변수를 수정해도 기존 볼륨의 자격 증명은 바뀌지 않습니다. `TOKEN_ENCRYPTION_KEY`는 Instagram 메시징을 위해 Vercel과 동일한 값을 설정합니다. SNS 탐색·발송과 AI 작업에 사용하는 연동 변수도 워커가 읽을 수 있도록 이 파일에 추가합니다.
+
+Docker 서버의 Bash에서 다음 명령을 실행합니다.
+
+```sh
+dc() {
+  docker compose -p creator-radar --env-file .env.production \
+    -f compose.production.yaml -f compose.self-hosted.yaml -f compose.vercel-db.yaml "$@"
+}
+
+dc up -d --build db migrate worker backup
+dc ps -a
+dc logs migrate
+```
+
+마이그레이션이 성공한 후 Vercel용 DB 역할을 한 번 생성합니다. 이 역할은 애플리케이션 테이블에 필요한 권한만 갖습니다. DB 마이그레이션에 사용하는 소유자 자격 증명은 Docker 서버에서 관리합니다.
+
+```sh
+dc exec db sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" exec psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+```
+
+```sql
+CREATE ROLE radar_web LOGIN;
+\password radar_web
+GRANT USAGE ON SCHEMA public TO radar_web;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO radar_web;
+REVOKE ALL ON TABLE public."_prisma_migrations" FROM radar_web;
+GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO radar_web;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO radar_web;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE ON SEQUENCES TO radar_web;
+\q
+```
+
+새 운영 DB에 로그인할 관리자가 필요하면 같은 셸에서 초기 계정을 생성합니다.
+
+```sh
+read -r -p '관리자 이메일: ' ADMIN_EMAIL
+read -r -s -p '관리자 비밀번호: ' ADMIN_PASSWORD
+export ADMIN_EMAIL ADMIN_PASSWORD
+dc run --rm -e ADMIN_EMAIL -e ADMIN_PASSWORD admin
+unset ADMIN_EMAIL ADMIN_PASSWORD
+```
+
+### 3. Vercel 환경변수 및 배포
+
+Vercel의 Settings → Environment Variables에서 아래 값을 **Production**에 설정합니다. Preview가 필요하면 별도 DB와 시크릿을 사용합니다. `.env.production`은 Docker 서버에서 관리합니다. [Vercel 환경변수](https://vercel.com/docs/environment-variables)
+
+| 변수 | Vercel 값 |
+| --- | --- |
+| `DATABASE_URL` | `postgresql://radar_web:<URL 인코딩한 역할 비밀번호>@db.example.com:5432/radar?schema=public&sslmode=require&sslaccept=strict&connection_limit=1` |
+| `APP_URL` | 브라우저에서 접속할 운영 HTTPS 주소. Docker 서버의 `APP_URL`과 일치해야 합니다. |
+| `SESSION_SECRET` | 운영 로그인용 무작위 32자 이상 문자열 |
+| `TOKEN_ENCRYPTION_KEY` | Instagram 연결을 쓸 경우 Docker 서버와 동일한 32바이트 Base64 키 |
+| SNS 및 AI 연동 변수 | [공식 API 연동 범위](integrations.md)에 따라 사용하는 기능의 값을 설정합니다. |
+
+Vercel 배포 후 `https://radar.example.com/api/health`에서 `{"ok":true}`가 나오면 웹/API에서 DB에 연결된 것입니다. `dc logs -f worker`로 워커가 실행되는지 확인한 후 로그인하고 탐색 작업 하나가 처리되는지 확인합니다. Instagram을 사용하는 경우 Meta의 OAuth 콜백과 웹훅 URL도 새 운영 주소에 맞춥니다.
+
+재배포할 때는 Docker 서버에서 새 코드로 마이그레이션과 워커를 먼저 반영한 뒤 Vercel 운영 배포를 적용합니다. 기존 로컬 데이터를 옮길 경우 아래 복구 절차를 사용합니다. DB 볼륨과 Docker 서버의 `./backups`는 [자체 호스팅 PostgreSQL](#자체-호스팅-postgresql)과 같은 방식으로 관리합니다.
+
 ## 복구
 
 1. 신규 격리 DB를 준비합니다. 운영 웹·워커가 연결되어 있으면 중지하고 현재 DB의 별도 백업을 확보합니다.
