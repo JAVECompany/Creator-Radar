@@ -4,12 +4,14 @@ export async function dashboard() {
   const now = new Date();
   const since = new Date(now.getTime() - 7 * 86400000);
   const available = { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] };
+  const socialQuery = db.creatorPlatformAccount.groupBy({ by: ["platform"], where: available, _count: { _all: true }, orderBy: { platform: "asc" } });
+  const stagesQuery = db.recruitmentCandidate.groupBy({ by: ["stage"], where: { active: true }, _count: { _all: true }, orderBy: { stage: "asc" } });
+  const statusesQuery = db.creator.groupBy({ by: ["contactStatus"], where: { accounts: { some: { platform: "INSTAGRAM" } } },
+    _count: { _all: true }, orderBy: { contactStatus: "asc" } });
+  const detectionsQuery = db.creatorPlatformAccount.groupBy({ by: ["detectionStatus"], where: available, _count: { _all: true }, orderBy: { detectionStatus: "asc" } });
   const [total, fresh, social, stages, statuses, analyzed, fan, categories, detections] = await db.$transaction([
     db.creator.count(), db.creator.count({ where: { createdAt: { gte: since } } }),
-    db.creatorPlatformAccount.groupBy({ by: ["platform"], where: available, _count: { _all: true }, orderBy: { platform: "asc" } }),
-    db.recruitmentCandidate.groupBy({ by: ["stage"], where: { active: true }, _count: { _all: true }, orderBy: { stage: "asc" } }),
-    db.creator.groupBy({ by: ["contactStatus"], where: { accounts: { some: { platform: "INSTAGRAM" } } },
-      _count: { _all: true }, orderBy: { contactStatus: "asc" } }),
+    socialQuery, stagesQuery, statusesQuery,
     db.creator.count({ where: { adultStatus: "VERIFIED", reviewStatus: "CLEARED", accounts: { some: { analysisStatus: "COMPLETED" } } } }),
     db.$queryRaw<{ name: string; total: bigint }[]>`
       SELECT p.name, count(DISTINCT a."creatorId") AS total
@@ -26,7 +28,7 @@ export async function dashboard() {
         AND r.id = (SELECT latest.id FROM "AnalysisResult" latest WHERE latest."accountId" = a.id AND latest.status = 'COMPLETED'
           ORDER BY latest."createdAt" DESC, latest.id DESC LIMIT 1)
       GROUP BY e.category`,
-    db.creatorPlatformAccount.groupBy({ by: ["detectionStatus"], where: available, _count: { _all: true }, orderBy: { detectionStatus: "asc" } }),
+    detectionsQuery,
   ]);
   const sent = await db.creator.count({ where: { accounts: { some: { messages: { some: { status: { in: ["SENT", "MANUALLY_SENT"] } } } } } } });
   return { total, fresh, social, stages, statuses, analyzed, sent, detections, fan: fan.map((x) => ({ name: x.name, total: Number(x.total) })),

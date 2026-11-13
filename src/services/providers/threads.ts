@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { profileIdentity } from "@/lib/urls";
-import { Provider, ProviderFailure, configured, count, officialJson, type Profile, type SearchInput } from "./types";
+import { Provider, ProviderFailure, configured, count, officialJson, unsupported, type Profile, type SearchInput } from "./types";
 
 const ownSchema = z.object({ id: z.string().min(1), username: z.string().min(1), name: z.string().nullish(),
   threads_biography: z.string().nullish(), threads_profile_picture_url: z.string().nullish() });
@@ -27,7 +27,7 @@ export class ThreadsProvider extends Provider {
   }
   async searchCreators({ query }: SearchInput) {
     const username = query.replace(/^@/, "");
-    if (!/^[a-z0-9._]{1,30}$/i.test(username)) return { status: "NOT_SUPPORTED", reason: "Threads의 정확한 사용자명을 입력하세요." } as const;
+    if (!/^[a-z0-9._]{1,30}$/i.test(username)) return unsupported<Profile[]>("Threads의 정확한 사용자명을 입력하세요.");
     const result = await this.getCreatorProfile("https://www.threads.com/@" + username);
     return { ...result, data: result.data ? [result.data] : undefined };
   }
