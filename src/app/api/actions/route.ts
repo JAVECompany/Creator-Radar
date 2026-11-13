@@ -21,6 +21,7 @@ export async function POST(request: Request) {
     const action = String(form.get("_action") ?? "");
     const result = await command(action, formPayload(form, action), user.id);
     if (action === "profile" && result && "creatorId" in result) return back("/creators/" + result.creatorId, "프로필을 등록했습니다.");
+    if (action === "discovery" && result && "reused" in result) return back(next, "같은 조건으로 등록한 검색 작업이 있습니다.");
     if (action === "instagramDisconnect" && result && "unsubscribed" in result && !result.unsubscribed)
       return back(next, "로컬 연결을 해제했습니다. Meta에서 앱 권한을 확인하세요.");
     return back(next, "저장했습니다.");

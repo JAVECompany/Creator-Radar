@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { check } from "@/lib/errors";
 import { publicUrl } from "@/lib/urls";
 import { audit, lock } from "./audit";
-import { discoverySchema, manualSchema, registerProfile } from "./collection";
+import { discoverySchema, manualSchema, platforms, registerProfile } from "./collection";
 import { filtersSchema } from "./directory";
 import { cancelJob, enqueue } from "./jobs";
 import { recordDM } from "./dm";
@@ -82,7 +82,23 @@ export async function command(raw: string, input: unknown, actorId: string) {
     switch (name) {
       case "discovery": {
         const data = schemas.discovery.parse(input);
-        const job = await enqueue(tx, "DISCOVERY", data, actorId);
+        const payload = { ...data, platforms: platforms.filter((platform) => data.platforms.includes(platform)) };
+        await lock(tx, "discovery:" + actorId + ":" + JSON.stringify(payload));
+        const existing = await tx.job.findFirst({
+          where: {
+            actorId,
+            type: "DISCOVERY",
+            payload: { equals: payload },
+            OR: [
+              { status: { in: ["PENDING", "RUNNING"] } },
+              { status: "COMPLETED", updatedAt: { gte: new Date(Date.now() - 3000) } },
+            ],
+          },
+          orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+          select: { id: true },
+        });
+        if (existing) return { id: existing.id, reused: true };
+        const job = await enqueue(tx, "DISCOVERY", payload, actorId);
         result = { id: job.id }; entityId = job.id;
         break;
       }
