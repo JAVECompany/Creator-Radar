@@ -1,18 +1,17 @@
 import Link from "next/link";
 import type { Filters } from "@/services/directory";
+import { platforms } from "@/lib/platforms";
 import { label } from "@/lib/labels";
 import { Button } from "./ui/button";
 import { Field, Input, Select } from "./ui/form";
 
 const options = {
-  platform: ["INSTAGRAM", "YOUTUBE", "TIKTOK", "NAVER_BLOG"],
   category: ["COSPLAY", "FASHION", "MODEL", "SWIMWEAR", "LINGERIE", "BODY_PROFILE", "ART_NUDE", "ADULT_ORIENTED_TEXT", "OTHER"],
   analysis: ["PENDING", "COMPLETED", "REVIEW", "FAILED"],
   stage: ["CANDIDATE", "REVIEWING", "CONTACT_READY", "CONTACTED", "REPLIED", "INTERESTED", "DEMO", "APPLIED", "APPROVED", "REJECTED"],
   dm: ["NOT_CONTACTED", "DRAFT", "QUEUED", "SENDING", "SENT", "MANUALLY_SENT", "FAILED", "NOT_ELIGIBLE", "REPLIED", "FOLLOW_UP"],
 };
 export const stages = options.stage;
-export const platformOptions = options.platform;
 export function OptionList({ values }: { values: string[] }) { return <>{values.map((value) => <option value={value} key={value}>{label(value)}</option>)}</>; }
 export function FilterFields({ filters, fans }: { filters: Filters; fans: string[] }) {
   return <>
@@ -22,7 +21,7 @@ export function FilterFields({ filters, fans }: { filters: Filters; fans: string
       <Field label="국가"><Input name="country" defaultValue={filters.country} maxLength={80} /></Field>
       <Field label="지역"><Input name="region" defaultValue={filters.region} maxLength={80} /></Field>
     </div>
-    <fieldset className="flex flex-wrap gap-x-5 gap-y-2"><legend className="mb-2 font-medium">SNS 플랫폼</legend>{options.platform.map((platform) => <label key={platform} className="flex items-center gap-2 text-muted-foreground"><input type="checkbox" name="platform" value={platform} defaultChecked={filters.platform.includes(platform as Filters["platform"][number])} />{label(platform)}</label>)}</fieldset>
+    <fieldset className="flex flex-wrap gap-x-5 gap-y-2"><legend className="mb-2 font-medium">SNS 플랫폼</legend>{platforms.map((platform) => <label key={platform} className="flex items-center gap-2 text-muted-foreground"><input type="checkbox" name="platform" value={platform} defaultChecked={filters.platform.includes(platform)} />{label(platform)}</label>)}</fieldset>
     <details className="rounded-lg border border-border p-3" open={Boolean(filters.category || filters.analysis || filters.stage || filters.dm || filters.min || filters.max || filters.activity || filters.engagement)}>
       <summary className="text-sm font-medium">상세 필터</summary>
       <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

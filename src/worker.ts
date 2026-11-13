@@ -4,6 +4,7 @@ import { type Job, type Prisma } from "@prisma/client";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { log, safeError } from "@/lib/errors";
+import { isSupportedPlatform } from "@/lib/platforms";
 import { analyze } from "@/services/analysis";
 import { collect, RetryJob } from "@/services/collection";
 import { deliverDM, expireDM } from "@/services/dm";
@@ -47,6 +48,8 @@ async function run(job: Job, progress: (value: number) => Promise<void>): Promis
     return score.success ? scoreCreator(score.data.creatorId) : collect(job, progress);
   }
   const { accountId } = z.object({ accountId: uuid }).parse(job.payload);
+  const { platform } = await db.creatorPlatformAccount.findUniqueOrThrow({ where: { id: accountId }, select: { platform: true } });
+  if (!isSupportedPlatform(platform)) return { status: "NOT_SUPPORTED", reason: "연동이 종료된 플랫폼입니다." };
   return job.type === "ANALYSIS" ? analyze(accountId, job.id) : scanSubscriptions(accountId);
 }
 

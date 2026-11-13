@@ -5,6 +5,7 @@ import { ArrowLeft, ExternalLink, RefreshCw, Send } from "lucide-react";
 import { adminPage } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { label } from "@/lib/labels";
+import { isSupportedPlatform } from "@/lib/platforms";
 import { formatCount, formatDate } from "@/lib/utils";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Action, Field, Hidden, Input, Select, Textarea } from "@/components/ui/form";
@@ -48,6 +49,7 @@ export default async function CreatorDetail({ params, searchParams }: { params: 
       <div className="grid content-start gap-4">
         {creator.accounts.map((account) => {
           const expired = account.expiresAt !== null && account.expiresAt <= new Date();
+          const supported = isSupportedPlatform(account.platform);
           return <Panel key={account.id} title={label(account.platform) + " · " + account.handle} description={label(account.source) + " · 마지막 수집 " + formatDate(account.collectedAt)}
             action={<div className="flex flex-wrap gap-2"><LinkOut url={account.profileUrl}><span className="inline-flex items-center gap-1">프로필 <ExternalLink size={14} /></span></LinkOut>
               {account.platform === "INSTAGRAM" && <Link href={"/compose?ids=" + account.id} className={buttonVariants()}><Send size={14} />DM 작성</Link>}</div>}>
@@ -56,14 +58,14 @@ export default async function CreatorDetail({ params, searchParams }: { params: 
               {account.platform === "INSTAGRAM" && <p className="text-xs text-muted-foreground">수신 프로필 연결용 계정 ID <code>{account.id}</code></p>}
               <p className="whitespace-pre-wrap text-sm text-muted-foreground">{expired ? "공급자 데이터 갱신 필요" : account.bio || "공개 프로필 소개 데이터 없음"}</p>
               {!expired && account.links.map((url) => <LinkOut key={url} url={url}>{url}</LinkOut>)}
-              <div className="flex flex-wrap gap-2">
+              {supported && <div className="flex flex-wrap gap-2">
                 {(["REFRESH", "METRICS", "SUBSCRIPTIONS", "ANALYSIS"] as const).map((type) => <Action key={type} action="job" next={next}><Hidden value={account.id} /><Hidden name="type" value={type} /><Button disabled={type === "ANALYSIS" && !eligible}><RefreshCw size={13} />{label(type)}</Button></Action>)}
-              </div>
+              </div>}
               <details><summary className="font-semibold">팬 구독 플랫폼 근거</summary><div className="mt-2 grid gap-2 text-sm">
                 <p className="text-muted-foreground">검사 시각 {formatDate(account.detectedAt)}</p>
                 {account.subscriptions.map((item) => <div key={item.id} className="rounded-lg border border-border p-3"><strong>{item.platform.name}</strong>{item.evidence.map((evidence) =>
                   <p key={evidence.id} className="mt-1"><LinkOut url={evidence.url}>{evidence.matched}</LinkOut>{evidence.ambiguous ? " · 수동 검토" : ""}</p>)}
-                  {item.evidence.length > 0 && item.evidence.every((evidence) => evidence.ambiguous) && <Action action="subscriptionReview" next={next} className="mt-2 flex gap-2">
+                  {supported && item.evidence.length > 0 && item.evidence.every((evidence) => evidence.ambiguous) && <Action action="subscriptionReview" next={next} className="mt-2 flex gap-2">
                     <Hidden value={item.id} /><Button name="decision" value="confirm">일치 확인</Button><Button name="decision" value="dismiss">일치 해제</Button>
                   </Action>}
                 </div>)}
@@ -72,9 +74,9 @@ export default async function CreatorDetail({ params, searchParams }: { params: 
                 {eligible && !expired && account.contents.length ? <ul className="grid gap-1 text-sm">{account.contents.map((content) => <li key={content.id}><LinkOut url={content.url}>{content.title ?? content.url}</LinkOut><span className="ml-2 text-xs text-muted-foreground">{label(content.source)} · {formatDate(content.publishedAt ?? content.collectedAt)}</span></li>)}</ul> : <p className="text-muted-foreground">표시할 게시물 데이터 없음</p>}
                 {eligible && account.analyses.map((analysis) => <div key={analysis.id} className="grid gap-2 rounded-lg border border-border p-3"><div className="flex flex-wrap items-center gap-2"><Badge value={analysis.status} /><span>{analysis.model} · {formatDate(analysis.createdAt)}</span>{analysis.manuallyReviewed && <Badge value="수동 검토 완료" />}</div>
                   {analysis.evidence.map((evidence) => <p key={evidence.id}><LinkOut url={evidence.url}>{label(evidence.category)}</LinkOut> · {(evidence.confidence * 100).toFixed(0)}%</p>)}
-                  {analysis.status === "COMPLETED" && !analysis.manuallyReviewed && <Action action="analysisReview" next={next}><Hidden value={account.id} /><Hidden name="analysisId" value={analysis.id} /><Button>검토 완료 기록</Button></Action>}
+                  {supported && analysis.status === "COMPLETED" && !analysis.manuallyReviewed && <Action action="analysisReview" next={next}><Hidden value={account.id} /><Hidden name="analysisId" value={analysis.id} /><Button>검토 완료 기록</Button></Action>}
                 </div>)}
-                {eligible && <Action action="content" next={next} className="grid gap-2 rounded-lg border border-border p-3">
+                {supported && eligible && <Action action="content" next={next} className="grid gap-2 rounded-lg border border-border p-3">
                   <Hidden value={account.id} /><Field label="공개 게시물 URL"><Input name="url" type="url" required maxLength={2048} /></Field>
                   <Field label="제목 또는 중립적인 주제 설명"><Input name="title" required maxLength={120} /></Field>
                   <Field label="분석용 공개 메타데이터"><Textarea name="description" maxLength={2000} /></Field>
@@ -84,7 +86,7 @@ export default async function CreatorDetail({ params, searchParams }: { params: 
               </div></details>
               <details><summary className="font-semibold">팔로워·구독자 변화</summary>
                 {!expired && account.metrics.some((item) => item.followers !== null) ? <CountsChart data={account.metrics.filter((item) => item.followers !== null).toReversed().map((item) => ({ name: item.capturedAt.toISOString().slice(5, 10), total: Number(item.followers) }))} /> : <p className="mt-2 text-muted-foreground">데이터 없음</p>}
-                {account.source === "MANUAL" && <Action action="publicMetrics" next={next} className="mt-3 grid gap-2 rounded-lg border border-border p-3">
+                {supported && account.source === "MANUAL" && <Action action="publicMetrics" next={next} className="mt-3 grid gap-2 rounded-lg border border-border p-3">
                   <Hidden value={account.id} /><Field label="공개 지표 근거 URL"><Input name="evidence" type="url" required maxLength={2048} /></Field>
                   <div className="grid gap-2 sm:grid-cols-3">
                     <Field label="팔로워·구독자"><Input name="followers" inputMode="numeric" pattern="[0-9]{1,18}" /></Field>

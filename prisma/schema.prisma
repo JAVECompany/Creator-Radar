@@ -10,6 +10,7 @@ enum Platform {
   INSTAGRAM
   YOUTUBE
   TIKTOK
+  // Historical account and request records only.
   NAVER_BLOG
 }
 

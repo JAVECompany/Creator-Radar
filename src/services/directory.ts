@@ -1,13 +1,13 @@
 import { AnalysisStatus, Category, DmStatus, Prisma, RecruitmentStage } from "@prisma/client";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { platforms } from "./collection";
+import { platforms } from "@/lib/platforms";
 import { messagingScope } from "./instagram";
 
 const small = z.string().trim().max(160);
 const optionalNumber = (limit: number) => z.coerce.number().min(0).max(limit).optional();
 export const filtersSchema = z.object({
-  q: small.optional(), country: small.optional(), region: small.optional(), platform: z.array(z.enum(platforms)).max(4).default([]),
+  q: small.optional(), country: small.optional(), region: small.optional(), platform: z.array(z.enum(platforms)).max(platforms.length).default([]),
   category: z.enum(Category).optional(), fan: small.optional(), analysis: z.enum(AnalysisStatus).optional(),
   stage: z.enum(RecruitmentStage).optional(), dm: z.enum(DmStatus).optional(),
   min: optionalNumber(1e15), max: optionalNumber(1e15), activity: optionalNumber(3650), engagement: optionalNumber(100),

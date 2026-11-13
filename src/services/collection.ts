@@ -1,24 +1,26 @@
-import type { Job, Platform, Prisma } from "@prisma/client";
+import { Platform, type Job, type Prisma } from "@prisma/client";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { check } from "@/lib/errors";
 import { profileIdentity, publicUrl } from "@/lib/urls";
+import { isSupportedPlatform, platforms } from "@/lib/platforms";
 import { audit, lock } from "./audit";
 import { providers } from "./providers";
 import type { Profile, ProviderStatus } from "./providers/types";
 import { enqueue } from "./jobs";
 
-export const platforms = ["INSTAGRAM", "YOUTUBE", "TIKTOK", "NAVER_BLOG"] as const;
 export const manualSchema = z.object({
   platform: z.enum(platforms), url: z.string().min(1).max(2048), name: z.string().trim().min(1).max(160),
   bio: z.string().trim().max(2000).optional(), country: z.string().trim().max(80).optional(), region: z.string().trim().max(80).optional(),
   link: z.string().trim().max(2048).optional(), existingCreatorId: z.uuid().optional(), linkEvidence: z.string().trim().max(2048).optional(),
 });
 export const discoverySchema = z.object({
-  platforms: z.array(z.enum(platforms)).min(1).max(4),
+  platforms: z.array(z.enum(platforms)).min(1).max(platforms.length),
   query: z.string().trim().min(1).max(150),
   country: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/).optional(),
 });
+const queuedDiscoverySchema = discoverySchema.extend({ platforms: z.array(z.enum(Platform)).min(1) });
+
 export async function registerProfile(input: z.infer<typeof manualSchema>, actorId: string) {
   const { platform, existingCreatorId } = input;
   const identity = profileIdentity(platform, input.url);
@@ -100,6 +102,7 @@ export async function collect(job: Job, updateProgress: (value: number) => Promi
   if (job.type !== "DISCOVERY") {
     const { accountId } = z.object({ accountId: z.uuid() }).parse(job.payload);
     const account = await db.creatorPlatformAccount.findUniqueOrThrow({ where: { id: accountId }, include: { creator: true } });
+    if (!isSupportedPlatform(account.platform)) return { status: "NOT_SUPPORTED", count: 0, reason: "연동이 종료된 플랫폼입니다." };
     check(account.creator.reviewStatus !== "HOLD" && account.creator.adultStatus !== "EXCLUDED", "검토 보류 중인 계정입니다.");
     const result = await providers[account.platform].refreshCreator(account.profileUrl);
     await db.providerRequestLog.create({ data: { platform: account.platform, operation: job.type, status: result.status, jobId: job.id } });
@@ -107,10 +110,15 @@ export async function collect(job: Job, updateProgress: (value: number) => Promi
     const count = result.data && await saveProfile(result.data, account.id) ? 1 : 0;
     return { status: result.status, count, reason: result.reason ?? null };
   }
-  const input = discoverySchema.parse(job.payload);
-  const platforms = [...new Set(input.platforms)];
+  const input = queuedDiscoverySchema.parse(job.payload);
+  const requestedPlatforms = [...new Set(input.platforms)];
   const summary: { platform: Platform; status: ProviderStatus; count: number; reason: string | null }[] = [];
-  for (const platform of platforms) {
+  for (const platform of requestedPlatforms) {
+    if (!isSupportedPlatform(platform)) {
+      summary.push({ platform, status: "NOT_SUPPORTED", count: 0, reason: "연동이 종료된 플랫폼입니다." });
+      await updateProgress(Math.round(100 * summary.length / requestedPlatforms.length));
+      continue;
+    }
     const result = await providers[platform].searchCreators(input);
     let count = 0;
     for (const profile of result.data ?? []) {
@@ -118,7 +126,7 @@ export async function collect(job: Job, updateProgress: (value: number) => Promi
     }
     await db.providerRequestLog.create({ data: { platform, operation: "DISCOVERY", status: result.status, count, jobId: job.id } });
     summary.push({ platform, status: result.status, count, reason: result.reason ?? null });
-    await updateProgress(Math.round(100 * summary.length / platforms.length));
+    await updateProgress(Math.round(100 * summary.length / requestedPlatforms.length));
   }
   if (summary.length === 1 && transient(summary[0].status)) throw new RetryJob(summary[0].reason ?? undefined);
   return { providers: summary, count: summary.reduce((sum, result) => sum + result.count, 0) };

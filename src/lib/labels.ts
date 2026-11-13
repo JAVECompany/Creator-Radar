@@ -1,5 +1,5 @@
 export const labels: Record<string, string> = {
-  INSTAGRAM: "Instagram", YOUTUBE: "YouTube", TIKTOK: "TikTok", NAVER_BLOG: "네이버 블로그",
+  INSTAGRAM: "Instagram", YOUTUBE: "YouTube", TIKTOK: "TikTok", NAVER_BLOG: "네이버 블로그 (연동 종료)",
   COSPLAY: "코스프레", FASHION: "패션", MODEL: "모델", SWIMWEAR: "수영복", LINGERIE: "란제리", BODY_PROFILE: "바디프로필",
   ART_NUDE: "예술 누드", ADULT_ORIENTED_TEXT: "성인 대상 글", OTHER: "기타",
   CANDIDATE: "후보", REVIEWING: "검토 중", CONTACT_READY: "연락 준비", CONTACTED: "연락함", REPLIED: "답장 수신",

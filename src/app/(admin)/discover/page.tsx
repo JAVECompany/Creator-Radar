@@ -3,6 +3,7 @@ import { Binoculars } from "lucide-react";
 import { adminPage } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { label } from "@/lib/labels";
+import { isSupportedPlatform } from "@/lib/platforms";
 import { providers } from "@/services/providers";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Action, Field, Hidden, Input } from "@/components/ui/form";
@@ -34,15 +35,24 @@ export default async function Discover({ searchParams }: { searchParams: Promise
       <Panel title="저장한 검색 조건" description="내부 DB 검색에 저장한 프리셋입니다.">
         {presets.length ? <ul className="divide-y divide-border">{presets.map((preset) => {
           const query = new URLSearchParams();
-          if (preset.filters && typeof preset.filters === "object" && !Array.isArray(preset.filters))
+          let retired = false;
+          if (preset.filters && typeof preset.filters === "object" && !Array.isArray(preset.filters)) {
             for (const [key, value] of Object.entries(preset.filters)) {
-              if (Array.isArray(value)) value.forEach((item) => query.append(key, String(item)));
+              if (key === "platform" && Array.isArray(value)) {
+                const supported = value.filter((item) => typeof item === "string" && isSupportedPlatform(item));
+                supported.forEach((item) => query.append(key, String(item)));
+                retired = value.length > 0 && supported.length === 0;
+              } else if (Array.isArray(value)) value.forEach((item) => query.append(key, String(item)));
               else if (value != null) query.set(key, String(value));
             }
-          return <li key={preset.id} className="flex items-center justify-between gap-2 p-4"><Link className="text-primary hover:underline" href={"/creators?" + query.toString()}>{preset.name}</Link><Action action="presetDelete" next="/discover"><Hidden value={preset.id} /><Button variant="ghost">삭제</Button></Action></li>;
+          }
+          return <li key={preset.id} className="flex items-center justify-between gap-2 p-4">
+            {retired ? <span className="text-muted-foreground">{preset.name} · 연동 종료</span> : <Link className="text-primary hover:underline" href={"/creators?" + query.toString()}>{preset.name}</Link>}
+            <Action action="presetDelete" next="/discover"><Hidden value={preset.id} /><Button variant="ghost">삭제</Button></Action>
+          </li>;
         })}</ul> : <Empty title="저장한 프리셋이 없습니다." description="전체 크리에이터 화면에서 필터를 저장할 수 있습니다." />}
       </Panel>
-      <div id="manual" className="scroll-mt-6 xl:col-span-2"><Panel title="공개 프로필 수동 등록" description="Instagram, YouTube, TikTok, 네이버 블로그의 공개 프로필 URL을 등록할 수 있습니다."><ManualProfile next="/discover#manual" /></Panel></div>
+      <div id="manual" className="scroll-mt-6 xl:col-span-2"><Panel title="공개 프로필 수동 등록" description="Instagram, YouTube, TikTok의 공개 프로필 URL을 등록할 수 있습니다."><ManualProfile next="/discover#manual" /></Panel></div>
     </div>
   </>;
 }

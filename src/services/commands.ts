@@ -3,8 +3,9 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { check } from "@/lib/errors";
 import { publicUrl } from "@/lib/urls";
+import { isSupportedPlatform, platforms } from "@/lib/platforms";
 import { audit, lock } from "./audit";
-import { discoverySchema, manualSchema, platforms, registerProfile } from "./collection";
+import { discoverySchema, manualSchema, registerProfile } from "./collection";
 import { filtersSchema } from "./directory";
 import { cancelJob, enqueue } from "./jobs";
 import { recordDM } from "./dm";
@@ -118,7 +119,10 @@ export async function command(raw: string, input: unknown, actorId: string) {
         const { id, type } = schemas.job.parse(input);
         const payload = type === "SCORE" ? { creatorId: id } : { accountId: id };
         if (type === "SCORE") await tx.creator.findUniqueOrThrow({ where: { id } });
-        else await tx.creatorPlatformAccount.findUniqueOrThrow({ where: { id } });
+        else {
+          const { platform } = await tx.creatorPlatformAccount.findUniqueOrThrow({ where: { id }, select: { platform: true } });
+          check(isSupportedPlatform(platform), "연동이 종료된 플랫폼입니다.", 409);
+        }
         const job = await enqueue(tx, type === "SCORE" ? "METRICS" : type, payload, actorId);
         if (type === "ANALYSIS") await tx.creatorPlatformAccount.update({ where: { id }, data: { analysisStatus: "PENDING" } });
         result = { id: job.id }; entityId = job.id;
@@ -145,7 +149,8 @@ export async function command(raw: string, input: unknown, actorId: string) {
         check(creator.adultStatus === "VERIFIED" && creator.reviewStatus === "CLEARED", "계정 검토 후 적법한 공개 게시물만 등록할 수 있습니다.");
         const contentUrl = link(url);
         const host = new URL(contentUrl).hostname.replace(/^www\./, "");
-        const hosts = { INSTAGRAM: ["instagram.com"], YOUTUBE: ["youtube.com", "youtu.be"], TIKTOK: ["tiktok.com"], NAVER_BLOG: ["blog.naver.com", "m.blog.naver.com"] };
+        check(isSupportedPlatform(account.platform), "연동이 종료된 플랫폼입니다.", 409);
+        const hosts = { INSTAGRAM: ["instagram.com"], YOUTUBE: ["youtube.com", "youtu.be"], TIKTOK: ["tiktok.com"] };
         check(hosts[account.platform].includes(host), "계정과 같은 SNS의 공개 게시물을 입력하세요.");
         const existing = await tx.creatorContent.findUnique({ where: { accountId_url: { accountId: id, url: contentUrl } } });
         if (existing?.source === "OFFICIAL_API") check(false, "공급자가 수집한 게시물은 표시 용도로 보관됩니다. 별도의 공개 게시물 근거를 입력하세요.");
@@ -157,13 +162,14 @@ export async function command(raw: string, input: unknown, actorId: string) {
       }
       case "analysisReview": {
         const { id, analysisId } = schemas.analysisReview.parse(input);
-        const changed = await tx.analysisResult.updateMany({ where: { id: analysisId, accountId: id, status: "COMPLETED" }, data: { manuallyReviewed: true } });
+        const changed = await tx.analysisResult.updateMany({ where: { id: analysisId, accountId: id, status: "COMPLETED", account: { platform: { in: [...platforms] } } }, data: { manuallyReviewed: true } });
         check(changed.count, "분석 결과를 찾을 수 없습니다."); entityId = analysisId;
         break;
       }
       case "publicMetrics": {
         const { id, evidence, followers, engagement, activity } = schemas.publicMetrics.parse(input);
         const account = await tx.creatorPlatformAccount.findUniqueOrThrow({ where: { id }, include: { creator: true } });
+        check(isSupportedPlatform(account.platform), "연동이 종료된 플랫폼입니다.", 409);
         await lock(tx, "collection:" + account.platform);
         await lock(tx, "dm:" + account.creatorId);
         const creator = await tx.creator.findUniqueOrThrow({ where: { id: account.creatorId } });
@@ -181,7 +187,8 @@ export async function command(raw: string, input: unknown, actorId: string) {
       }
       case "subscriptionReview": {
         const { id, decision } = schemas.subscriptionReview.parse(input);
-        const target = await tx.creatorSubscriptionPlatform.findUniqueOrThrow({ where: { id }, select: { accountId: true } });
+        const target = await tx.creatorSubscriptionPlatform.findUniqueOrThrow({ where: { id }, select: { accountId: true, account: { select: { platform: true } } } });
+        check(isSupportedPlatform(target.account.platform), "연동이 종료된 플랫폼입니다.", 409);
         await lock(tx, "subscriptions:" + target.accountId);
         const detected = await tx.creatorSubscriptionPlatform.findUniqueOrThrow({ where: { id }, include: { evidence: true } });
         check(detected.evidence.length && detected.evidence.every((item) => item.ambiguous), "모호한 감지 결과만 검토할 수 있습니다.", 409);
@@ -258,7 +265,7 @@ export async function command(raw: string, input: unknown, actorId: string) {
       }
       case "erase": {
         const { id } = schemas.erase.parse(input);
-        for (const platform of ["INSTAGRAM", "NAVER_BLOG", "TIKTOK", "YOUTUBE"]) await lock(tx, "collection:" + platform);
+        for (const platform of platforms) await lock(tx, "collection:" + platform);
         await lock(tx, "dm:" + id);
         const creator = await tx.creator.findUniqueOrThrow({ where: { id }, include: { accounts: { select: { id: true, messages: { select: { id: true } } } } } });
         const accountIds = creator.accounts.map((item) => item.id);

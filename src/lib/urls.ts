@@ -1,6 +1,6 @@
 import { isIP } from "node:net";
-import type { Platform } from "@prisma/client";
 import { check } from "./errors";
+import type { SupportedPlatform } from "./platforms";
 
 export function publicUrl(value: string) {
   let url: URL;
@@ -15,7 +15,7 @@ export function externalLinks(text: string) {
   return (text.match(/https:\/\/[^\s<>"')\]]+/gi) ?? []).slice(0, 25)
     .map((url) => publicUrl(url)?.href).filter((url): url is string => Boolean(url));
 }
-export function profileIdentity(platform: Platform, input: string) {
+export function profileIdentity(platform: SupportedPlatform, input: string) {
   const url = publicUrl(input.trim());
   check(url, "공개 HTTPS 프로필 URL을 입력하세요.");
   const host = url.hostname.replace(/^www\./, "");
@@ -41,10 +41,6 @@ export function profileIdentity(platform: Platform, input: string) {
         if (/^@[\p{L}\p{N}_.-]{1,100}$/u.test(handle)) canonical = "https://www.youtube.com/@" + encodeURIComponent(handle.slice(1));
       } catch { /* Invalid percent escape. */ }
     }
-  } else if (platform === "NAVER_BLOG" && ["blog.naver.com", "m.blog.naver.com"].includes(host) && parts.length === 1 && /^[a-z0-9_-]{2,50}$/i.test(parts[0])) {
-    handle = parts[0].toLowerCase();
-    canonical = "https://blog.naver.com/" + handle;
-    externalId = handle;
   }
   check(handle && canonical, "선택한 플랫폼의 프로필 주소 형식을 확인하세요.");
   return { handle, profileUrl: canonical, externalId };

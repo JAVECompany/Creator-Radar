@@ -1,11 +1,10 @@
 # 공식 API 연동 범위
 
-각 어댑터는 정상, 일부 지원, 인증 필요, 미지원, 요청 제한, 일시적 장애 및 실패 상태를 반환합니다. 연결 성공 여부는 관리자 작업 화면에서 실제 호출 결과로 확인합니다. 모든 SNS는 공개 프로필 URL 수동 등록을 지원합니다.
+각 어댑터는 정상, 일부 지원, 인증 필요, 미지원, 요청 제한, 일시적 장애 및 실패 상태를 반환합니다. 연결 성공 여부는 관리자 작업 화면에서 실제 호출 결과로 확인합니다. Instagram, YouTube, TikTok은 공개 프로필 URL 수동 등록을 지원합니다. 기존 네이버 블로그 기록은 연동 종료로 표시되며 조회할 수 있습니다.
 
 | 공급자 | 구현한 호출 | 연동 준비와 제한 |
 | --- | --- | --- |
 | YouTube | Data API 채널 키워드 검색, ID·핸들로 채널 조회, 공개 구독자 수와 업로드 목록 | `YOUTUBE_API_KEY`. 지역 코드는 결과 지역 조건이며 계정 국가를 증명하지 않습니다. 구독자 숨김은 결측입니다. 제공 메타데이터에 보존 기한을 적용하고 제공 데이터는 팬 분류와 적합도 계산에서 제외합니다. [API 레퍼런스](https://developers.google.com/youtube/data/reference/rest) · [개발자 정책](https://developers.google.com/youtube/terms/developer-policies) |
-| NAVER Blog | NAVER API HUB 검색 결과의 공개 글과 식별 가능한 네이버 블로그 작성자 | `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET`. 검색 결과 저장과 CRM 사용이 계약상 허용되는 경우에만 `NAVER_PERSISTENCE_APPROVED=true`. 검색 API에서 제공하지 않는 독립 프로필·팔로워 통계는 결측입니다. [블로그 검색](https://api.ncloud-docs.com/docs/naver-api-hub-search-blog) · [이관 안내](https://developers.naver.com/notice/article/32530) |
 | Instagram 탐색 | Facebook Login의 Business Discovery로 정확한 사용자명의 프로페셔널 계정 조회 | `IG_DISCOVERY_TOKEN`, `IG_DISCOVERY_ACCOUNT_ID`, `META_GRAPH_VERSION`. 연결된 Facebook Page, 대상 API 권한 및 필요한 App Review를 확인합니다. 일반 계정 및 키워드 탐색은 수동 등록을 사용합니다. [Meta Instagram API](https://www.postman.com/meta/instagram/collection/6yqw8pt/instagram-api) |
 | TikTok | 동의한 단일 계정의 Display API 공개 프로필 및 승인 범위 내 영상·팔로워 수 | `TIKTOK_ACCESS_TOKEN`, `TIKTOK_SCOPES`. `user.info.basic`과 `user.info.profile`이 필요하며 영상에는 `video.list`, 팔로워에는 `user.info.stats`가 필요합니다. 토큰 교체는 운영자가 관리합니다. 일반 계정 검색은 수동 등록을 사용합니다. [Display API](https://developers.tiktok.com/docs/en/display-api-get-started) · [스코프](https://developers.tiktok.com/bulletin/user-info-scope-migration) |
 | AI 분석 | 공개 게시물 주제 분류 및 신뢰도·근거·모델 기록 | `AI_PROVIDER=openai`, `OPENAI_API_KEY`, `OPENAI_MODEL`. 모델은 Chat Completions의 JSON 응답을 지원해야 합니다. 관리자 검토를 거친 게시물의 텍스트 메타데이터만 전달합니다. |

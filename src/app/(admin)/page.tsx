@@ -4,7 +4,7 @@ import { adminPage } from "@/lib/auth";
 import { label } from "@/lib/labels";
 import { formatCount } from "@/lib/utils";
 import { dashboard } from "@/services/dashboard";
-import { platforms } from "@/services/collection";
+import { platforms } from "@/lib/platforms";
 import { buttonVariants } from "@/components/ui/button";
 import { Badge, Empty, Flash, PageTitle, Panel } from "@/components/ui/panel";
 import { CountsChart } from "@/components/chart";
